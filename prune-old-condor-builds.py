@@ -22,10 +22,6 @@ if __name__ == "__main__" and __package__ is None:
 # To run unit tests, run with --self-test
 
 
-class BuildInfo:
-    pass  ### forward declaration for type hinting
-
-
 #######################################################################
 # Unit testing {{{
 import unittest
@@ -108,7 +104,7 @@ class BuildInfo:
         self.groupkey = groupkey
 
     @classmethod
-    def from_filename(cls, filename: str) -> Optional[BuildInfo]:
+    def from_filename(cls, filename: str) -> Optional["BuildInfo"]:
         m = re.match(
             r"condor-(?P<pre>\d+[.]\d+[.]\d+-)(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})(?P<post>.+)",
             os.path.basename(filename),
@@ -129,22 +125,22 @@ class BuildInfo:
         threshold_date = date.today() - timedelta(days=threshold)
         return self.builddate < threshold_date
 
-    def __lt__(self, other: BuildInfo):
+    def __lt__(self, other: "BuildInfo"):
         return (self.builddate, self.groupkey) < (other.builddate, other.groupkey)
 
-    def __eq__(self, other: BuildInfo):
+    def __eq__(self, other: "BuildInfo"):
         return (self.builddate, self.groupkey) == (other.builddate, other.groupkey)
 
-    def __gt__(self, other: BuildInfo):
+    def __gt__(self, other: "BuildInfo"):
         return (self.builddate, self.groupkey) > (other.builddate, other.groupkey)
 
-    def __le__(self, other: BuildInfo):
+    def __le__(self, other: "BuildInfo"):
         return (self.builddate, self.groupkey) <= (other.builddate, other.groupkey)
 
-    def __ge__(self, other: BuildInfo):
+    def __ge__(self, other: "BuildInfo"):
         return (self.builddate, self.groupkey) >= (other.builddate, other.groupkey)
 
-    def __ne__(self, other: BuildInfo):
+    def __ne__(self, other: "BuildInfo"):
         return (self.builddate, self.groupkey) != (other.builddate, other.groupkey)
 
     def __str__(self):
