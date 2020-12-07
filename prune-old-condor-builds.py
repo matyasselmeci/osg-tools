@@ -70,12 +70,12 @@ class TestSelf(unittest.TestCase):
         exp_date = date(2020, 10, 14)
         # fmt: off
         expected = [
-            BuildInfo(groupkey="8.9.9--Windows-x64.msi", date=exp_date),
-            BuildInfo(groupkey="8.9.9--Windows-x64.zip", date=exp_date),
-            BuildInfo(groupkey="8.9.9--x86_64_CentOS7-stripped.tar.gz", date=exp_date),
-            BuildInfo(groupkey="8.9.9--x86_64_CentOS7-unstripped.tar.gz", date=exp_date),
-            BuildInfo(groupkey="8.9.9--x86_64_CentOS8-stripped.tar.gz", date=exp_date),
-            BuildInfo(groupkey="8.9.9--x86_64_CentOS8-unstripped.tar.gz", date=exp_date),
+            BuildInfo(groupkey="8.9.9--Windows-x64.msi", builddate=exp_date),
+            BuildInfo(groupkey="8.9.9--Windows-x64.zip", builddate=exp_date),
+            BuildInfo(groupkey="8.9.9--x86_64_CentOS7-stripped.tar.gz", builddate=exp_date),
+            BuildInfo(groupkey="8.9.9--x86_64_CentOS7-unstripped.tar.gz", builddate=exp_date),
+            BuildInfo(groupkey="8.9.9--x86_64_CentOS8-stripped.tar.gz", builddate=exp_date),
+            BuildInfo(groupkey="8.9.9--x86_64_CentOS8-unstripped.tar.gz", builddate=exp_date),
             None,
             None,
         ]
@@ -95,11 +95,17 @@ def self_test():
 #######################################################################
 
 
-class BuildInfo(namedtuple("BuildInfo", "date groupkey")):
+class BuildInfo:
     """Contains the information for a build, extracted from the file name.
-    - date: build date as datetime.date object
+    - builddate: build date as datetime.date object
     - groupkey: everything else from the filename: version, platform, arch, stripped/unstripped, format, etc.
     """
+    builddate = None
+    groupkey = None
+
+    def __init__(self, builddate: date, groupkey: str):
+        self.builddate = builddate
+        self.groupkey = groupkey
 
     @classmethod
     def from_filename(cls, filename: str) -> Optional[BuildInfo]:
@@ -113,7 +119,7 @@ class BuildInfo(namedtuple("BuildInfo", "date groupkey")):
             int(m.group("year")), int(m.group("month")), int(m.group("day"))
         )
         groupkey = m.group("pre") + m.group("post")
-        return cls(date=builddate, groupkey=groupkey)
+        return cls(builddate=builddate, groupkey=groupkey)
 
     @classmethod
     def file_older_than_threshold(cls, filename: str, threshold: float) -> bool:
@@ -121,7 +127,28 @@ class BuildInfo(namedtuple("BuildInfo", "date groupkey")):
 
     def older_than_threshold(self, threshold: float) -> bool:
         threshold_date = date.today() - timedelta(days=threshold)
-        return self.date < threshold_date
+        return self.builddate < threshold_date
+
+    def __lt__(self, other: BuildInfo):
+        return (self.builddate, self.groupkey) < (other.builddate, other.groupkey)
+
+    def __eq__(self, other: BuildInfo):
+        return (self.builddate, self.groupkey) == (other.builddate, other.groupkey)
+
+    def __gt__(self, other: BuildInfo):
+        return (self.builddate, self.groupkey) > (other.builddate, other.groupkey)
+
+    def __le__(self, other: BuildInfo):
+        return (self.builddate, self.groupkey) <= (other.builddate, other.groupkey)
+
+    def __ge__(self, other: BuildInfo):
+        return (self.builddate, self.groupkey) >= (other.builddate, other.groupkey)
+
+    def __ne__(self, other: BuildInfo):
+        return (self.builddate, self.groupkey) != (other.builddate, other.groupkey)
+
+    def __str__(self):
+        return "(%s, %s)" % self.builddate, self.groupkey
 
 
 class BuildsLists:
@@ -136,7 +163,7 @@ class BuildsLists:
         for key, buildslist in self.data.items():
             if not buildslist:
                 continue
-            ret[key] = sorted(buildslist, key=lambda x: x.date)[-1]
+            ret[key] = sorted(buildslist)[-1]
         return ret
 
 
