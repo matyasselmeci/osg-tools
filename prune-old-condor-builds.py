@@ -68,6 +68,7 @@ class TestSelf(unittest.TestCase):
 
     def test_BuildInfo_from_file(self):
         exp_date = date(2020, 10, 14)
+        # fmt: off
         expected = [
             BuildInfo(groupkey="8.9.9--Windows-x64.msi", date=exp_date),
             BuildInfo(groupkey="8.9.9--Windows-x64.zip", date=exp_date),
@@ -78,6 +79,7 @@ class TestSelf(unittest.TestCase):
             None,
             None,
         ]
+        # fmt: on
 
         for idx, val in enumerate(test_dir1):
             self.assertEqual(expected[idx], BuildInfo.from_filename(val))
@@ -102,13 +104,15 @@ class BuildInfo(namedtuple("BuildInfo", "date groupkey")):
     @classmethod
     def from_filename(cls, filename: str) -> Optional[BuildInfo]:
         m = re.match(
-            r"condor-(\d+[.]\d+[.]\d+-)(\d{8})(.+)", os.path.basename(filename)
+            r"condor-(?P<pre>\d+[.]\d+[.]\d+-)(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})(?P<post>.+)",
+            os.path.basename(filename),
         )
         if not m:
             return None
-        pre, builddate, post = m.groups()
-        builddate = date(int(builddate[0:4]), int(builddate[4:6]), int(builddate[6:8]))
-        groupkey = pre + post
+        builddate = date(
+            int(m.group("year")), int(m.group("month")), int(m.group("day"))
+        )
+        groupkey = m.group("pre") + m.group("post")
         return cls(date=builddate, groupkey=groupkey)
 
     @classmethod
