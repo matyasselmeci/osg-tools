@@ -104,11 +104,23 @@ class TestSelf(unittest.TestCase):
             bl.add_build(BuildInfo.from_filename(fn))
         nonlatest = bl.non_latest_by_key()
         self.assertIn("8.9.9--x86_64_CentOS7-stripped.tar.gz", nonlatest)
-        self.assertEqual(nonlatest["8.9.9--x86_64_CentOS7-stripped.tar.gz"][0].builddate, date(2020, 10, 14))
+        self.assertEqual(
+            nonlatest["8.9.9--x86_64_CentOS7-stripped.tar.gz"][0].builddate,
+            date(2020, 10, 14),
+        )
 
     def test_older_than_threshold(self):
-        self.assertTrue(BuildInfo.from_filename("condor-8.9.9-20201014-Windows-x64.msi").older_than_threshold(threshold=30.0, today=date(2020, 11, 14)))
-        self.assertFalse(BuildInfo.from_filename("condor-8.9.9-20201014-Windows-x64.msi").older_than_threshold(threshold=60.0, today=date(2020, 11, 14)))
+        self.assertTrue(
+            BuildInfo.from_filename(
+                "condor-8.9.9-20201014-Windows-x64.msi"
+            ).older_than_threshold(threshold=30.0, today=date(2020, 11, 14))
+        )
+        self.assertFalse(
+            BuildInfo.from_filename(
+                "condor-8.9.9-20201014-Windows-x64.msi"
+            ).older_than_threshold(threshold=60.0, today=date(2020, 11, 14))
+        )
+
 
 def self_test():
     """Run the unit tests"""
