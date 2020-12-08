@@ -4,15 +4,15 @@
 
 
 """
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from datetime import date, timedelta
-import glob
+import itertools
 import re
 import os
 import shutil
 import subprocess
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 if __name__ == "__main__" and __package__ is None:
     sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -50,8 +50,8 @@ test_dir2 = test_dir1 + [
 
 # also including a subset of newer binaries
 test_dir3 = test_dir2 + [
-    "condor-8.9.9-20201115-Windows-x64.msi",
-    "condor-8.9.9-20201115-Windows-x64.zip",
+    "condor-8.9.9-20201215-Windows-x64.msi",
+    "condor-8.9.9-20201215-Windows-x64.zip",
 ]
 
 
@@ -121,6 +121,20 @@ class TestSelf(unittest.TestCase):
             ).older_than_threshold(threshold=60.0, today=date(2020, 11, 14))
         )
 
+    def test_deletion_candidates(self):
+        bl = BuildLists()
+        for fn in test_dir3:
+            bl.add_build(BuildInfo.from_filename(fn))
+        candidates1 = bl.deletion_candidates(threshold=30.0, today=date(2020, 12, 15))
+        candidates2 = bl.deletion_candidates(threshold=30.0, today=date(2020, 11, 15))
+        self.assertEqual(len(candidates1), 8)
+        self.assertEqual(len(candidates2), 6)
+        for candidates in candidates1, candidates2:
+            self.assertNotIn("condor-8.9.9-20201215-Windows-x64.msi", candidates)
+            self.assertNotIn("condor-8.9.9-20201114-x86_64_CentOS7-unstripped.tar.gz", candidates)
+            self.assertIn("condor-8.9.9-20201014-x86_64_CentOS7-unstripped.tar.gz", candidates)
+
+
 
 def self_test():
     """Run the unit tests"""
@@ -131,6 +145,7 @@ def self_test():
 # }}}
 #######################################################################
 
+TODAY = date.today()
 
 class BuildInfo:
     """Contains the information for a build, extracted from the file name.
@@ -162,29 +177,12 @@ class BuildInfo:
         groupkey = m.group("pre") + m.group("post")
         return cls(builddate=builddate, groupkey=groupkey, filename=filename)
 
-    def older_than_threshold(self, threshold: float, today: date = None) -> bool:
-        if not today:
-            today = date.today()
+    def older_than_threshold(self, threshold: float, today=TODAY) -> bool:
         threshold_date = today - timedelta(days=threshold)
         return self.builddate < threshold_date
 
-    def __lt__(self, other: "BuildInfo"):
-        return (self.builddate, self.groupkey) < (other.builddate, other.groupkey)
-
     def __eq__(self, other: "BuildInfo"):
         return (self.builddate, self.groupkey) == (other.builddate, other.groupkey)
-
-    def __gt__(self, other: "BuildInfo"):
-        return (self.builddate, self.groupkey) > (other.builddate, other.groupkey)
-
-    def __le__(self, other: "BuildInfo"):
-        return (self.builddate, self.groupkey) <= (other.builddate, other.groupkey)
-
-    def __ge__(self, other: "BuildInfo"):
-        return (self.builddate, self.groupkey) >= (other.builddate, other.groupkey)
-
-    def __ne__(self, other: "BuildInfo"):
-        return (self.builddate, self.groupkey) != (other.builddate, other.groupkey)
 
     def __repr__(self):
         return "BuildInfo(%s, %s)" % (self.builddate, self.groupkey)
@@ -195,20 +193,27 @@ class BuildInfo:
 
 class BuildLists:
     def __init__(self):
-        # can't use a set because buildinfo is unhashable
-        self.data = defaultdict(list)
+        self.data = defaultdict(set)
 
     def add_build(self, buildinfo: BuildInfo):
         if buildinfo:
-            self.data[buildinfo.groupkey].append(buildinfo)
+            self.data[buildinfo.groupkey].add(buildinfo)
+
+    def add_builds(self, builds: Iterable[BuildInfo]):
+        for it in builds:
+            self.add_build(it)
 
     def non_latest_by_key(self) -> Dict[str, List[BuildInfo]]:
         ret = {}
         for key, buildslist in self.data.items():
             if not buildslist:
                 continue
-            ret[key] = sorted(buildslist)[:-1]
+            ret[key] = sorted(buildslist, key=lambda x: (x.builddate, x.groupkey))[:-1]
         return ret
+
+    def deletion_candidates(self, threshold: float, today=TODAY) -> List[str]:
+        all_nonlatest = itertools.chain.from_iterable(self.non_latest_by_key().values())
+        return [build.filename for build in all_nonlatest if build.older_than_threshold(threshold=threshold, today=today)]
 
 
 def main(argv):
