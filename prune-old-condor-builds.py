@@ -56,12 +56,6 @@ test_dir3 = test_dir2 + [
 
 
 class TestSelf(unittest.TestCase):
-    def setUp(self):
-        return
-
-    def tearDown(self):
-        return
-
     def test_BuildInfo_from_file(self):
         exp_date = date(2020, 10, 14)
         # fmt: off
@@ -81,27 +75,19 @@ class TestSelf(unittest.TestCase):
             self.assertEqual(expected[idx], BuildInfo.from_filename(val))
 
     def test_BuildLists1(self):
-        bl = BuildLists()
-        for fn in test_dir1:
-            bl.add_build(BuildInfo.from_filename(fn))
+        bl = BuildLists(BuildInfo.from_filename(fn) for fn in test_dir1)
         self.assertEqual(len(bl.data), 6)
 
     def test_BuildLists2(self):
-        bl = BuildLists()
-        for fn in test_dir2:
-            bl.add_build(BuildInfo.from_filename(fn))
+        bl = BuildLists(BuildInfo.from_filename(fn) for fn in test_dir2)
         self.assertEqual(len(bl.data), 6)
 
     def test_BuildLists3(self):
-        bl = BuildLists()
-        for fn in test_dir3:
-            bl.add_build(BuildInfo.from_filename(fn))
+        bl = BuildLists(BuildInfo.from_filename(fn) for fn in test_dir3)
         self.assertEqual(len(bl.data), 6)
 
     def test_nonlatest(self):
-        bl = BuildLists()
-        for fn in test_dir3:
-            bl.add_build(BuildInfo.from_filename(fn))
+        bl = BuildLists(BuildInfo.from_filename(fn) for fn in test_dir3)
         nonlatest = bl.non_latest_by_key()
         self.assertIn("8.9.9--x86_64_CentOS7-stripped.tar.gz", nonlatest)
         self.assertEqual(
@@ -113,20 +99,20 @@ class TestSelf(unittest.TestCase):
         self.assertTrue(
             BuildInfo.from_filename(
                 "condor-8.9.9-20201014-Windows-x64.msi"
-            ).older_than_threshold(threshold=30.0, today=date(2020, 11, 14))
+            ).older_than_threshold(threshold_days=30.0, today=date(2020, 11, 14))
         )
         self.assertFalse(
             BuildInfo.from_filename(
                 "condor-8.9.9-20201014-Windows-x64.msi"
-            ).older_than_threshold(threshold=60.0, today=date(2020, 11, 14))
+            ).older_than_threshold(threshold_days=60.0, today=date(2020, 11, 14))
         )
 
     def test_deletion_candidates(self):
         bl = BuildLists()
         for fn in test_dir3:
             bl.add_build(BuildInfo.from_filename(fn))
-        candidates1 = bl.deletion_candidates(threshold=30.0, today=date(2020, 12, 15))
-        candidates2 = bl.deletion_candidates(threshold=30.0, today=date(2020, 11, 15))
+        candidates1 = bl.deletion_candidates(threshold_days=30.0, today=date(2020, 12, 15))
+        candidates2 = bl.deletion_candidates(threshold_days=30.0, today=date(2020, 11, 15))
         self.assertEqual(len(candidates1), 8)
         self.assertEqual(len(candidates2), 6)
         for candidates in candidates1, candidates2:
@@ -146,12 +132,17 @@ def self_test():
 #######################################################################
 
 TODAY = date.today()
+PRUNE_EXTENSIONS = [".tar.gz", ".tar.bz2", ".tar.xz", ".rpm", ".deb", ".zip", ".msi"]
+
 
 class BuildInfo:
     """Contains the information for a build, extracted from the file name.
     - builddate: build date as datetime.date object
     - groupkey: everything else from the filename: version, platform, arch, stripped/unstripped, format, etc.
     - filename: the filename itself
+
+    Generally you should use the from_filename() factory method, which can return None
+    if the filename is in the wrong format for a build.
     """
 
     builddate = None
@@ -165,6 +156,16 @@ class BuildInfo:
 
     @classmethod
     def from_filename(cls, filename: str) -> Optional["BuildInfo"]:
+        """Factory method; parse the filename to get the info.  Will return None if
+        the filename doesn't look like a build, i.e. wrong extension, or can't be
+        parsed.
+
+        """
+        for extension in PRUNE_EXTENSIONS:
+            if filename.endswith(extension):
+                break
+        else:
+            return None
         m = re.search(
             r"condor-(?P<pre>\d+[.]\d+[.]\d+-)(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})(?P<post>.+)",
             os.path.basename(filename),
@@ -177,8 +178,8 @@ class BuildInfo:
         groupkey = m.group("pre") + m.group("post")
         return cls(builddate=builddate, groupkey=groupkey, filename=filename)
 
-    def older_than_threshold(self, threshold: float, today=TODAY) -> bool:
-        threshold_date = today - timedelta(days=threshold)
+    def older_than_threshold(self, threshold_days: float, today=TODAY) -> bool:
+        threshold_date = today - timedelta(days=threshold_days)
         return self.builddate < threshold_date
 
     def __eq__(self, other: "BuildInfo"):
@@ -192,8 +193,10 @@ class BuildInfo:
 
 
 class BuildLists:
-    def __init__(self):
+    def __init__(self, builds: Optional[Iterable] = None):
+        builds = builds or []
         self.data = defaultdict(set)
+        self.add_builds(builds)
 
     def add_build(self, buildinfo: BuildInfo):
         if buildinfo:
@@ -211,9 +214,9 @@ class BuildLists:
             ret[key] = sorted(buildslist, key=lambda x: (x.builddate, x.groupkey))[:-1]
         return ret
 
-    def deletion_candidates(self, threshold: float, today=TODAY) -> List[str]:
+    def deletion_candidates(self, threshold_days: float, today=TODAY) -> List[str]:
         all_nonlatest = itertools.chain.from_iterable(self.non_latest_by_key().values())
-        return [build.filename for build in all_nonlatest if build.older_than_threshold(threshold=threshold, today=today)]
+        return [build.filename for build in all_nonlatest if build.older_than_threshold(threshold_days=threshold_days, today=today)]
 
 
 def main(argv):
